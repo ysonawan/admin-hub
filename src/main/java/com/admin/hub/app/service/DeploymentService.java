@@ -4,6 +4,7 @@ import com.admin.hub.app.config.DeployerProperties;
 import com.admin.hub.app.dto.ApplicationConfiguration;
 import com.admin.hub.app.dto.ConfigurationResponse;
 import com.admin.hub.app.dto.DeploymentResponse;
+import com.admin.hub.app.dto.LogsResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
@@ -140,16 +141,51 @@ public class DeploymentService {
      * Get application logs
      */
     public DeploymentResponse getLogs(String applicationName, Integer lines) {
-        String endpoint = "/api/v1/application/logs/" + applicationName;
-        if (lines != null && lines > 0) {
-            endpoint += "?lines=" + Math.min(lines, 10000);
+        try {
+            String endpoint = "/api/v1/application/logs/" + applicationName;
+            if (lines != null && lines > 0) {
+                endpoint += "?lines=" + Math.min(lines, 10000);
+            }
+
+            String url = deployerProperties.getBaseUrl() + endpoint;
+            HttpEntity<String> entity = createRequestEntity();
+
+            log.info("Fetching logs for {} from: {}", applicationName, url);
+            ResponseEntity<LogsResponse> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, LogsResponse.class
+            );
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                LogsResponse logsResponse = response.getBody();
+                String logsContent = logsResponse.getData() != null
+                        ? logsResponse.getData().getCombinedLogs()
+                        : "No logs available";
+
+                return DeploymentResponse.builder()
+                        .applicationName(applicationName)
+                        .action("logs")
+                        .success(logsResponse.isSuccess())
+                        .message("Logs retrieved successfully")
+                        .logs(logsContent)
+                        .data(logsResponse.getData())
+                        .build();
+            } else {
+                return DeploymentResponse.builder()
+                        .applicationName(applicationName)
+                        .action("logs")
+                        .success(false)
+                        .message("Failed to fetch logs with status: " + response.getStatusCode())
+                        .build();
+            }
+        } catch (RestClientException e) {
+            log.error("Error fetching logs for {}: {}", applicationName, e.getMessage(), e);
+            return DeploymentResponse.builder()
+                    .applicationName(applicationName)
+                    .action("logs")
+                    .success(false)
+                    .message("Error: " + e.getMessage())
+                    .build();
         }
-        return executeDeploymentAction(
-                applicationName,
-                endpoint,
-                HttpMethod.GET,
-                "logs"
-        );
     }
 
     /**

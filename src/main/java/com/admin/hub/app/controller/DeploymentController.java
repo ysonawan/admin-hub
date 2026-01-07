@@ -186,7 +186,7 @@ public class DeploymentController {
     @GetMapping("/logs/{applicationName}")
     public ResponseEntity<DeploymentResponse> getLogs(
             @PathVariable String applicationName,
-            @RequestParam(defaultValue = "100") Integer lines) {
+            @RequestParam(defaultValue = "1000") Integer lines) {
         try {
             DeploymentResponse response = deploymentService.getLogs(applicationName, lines);
             return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);

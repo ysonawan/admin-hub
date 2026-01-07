@@ -121,7 +121,7 @@ export class DeploymentService {
   /**
    * Get application logs
    */
-  getLogs(applicationName: string, lines: number = 100): Observable<DeploymentResponse> {
+  getLogs(applicationName: string, lines: number = 1000): Observable<DeploymentResponse> {
     let params = new HttpParams();
     params = params.set('lines', lines.toString());
     return this.http.get<DeploymentResponse>(

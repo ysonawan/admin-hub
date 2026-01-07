@@ -229,7 +229,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       case 'status':
         return this.deploymentService.getStatus(appName);
       case 'logs':
-        return this.deploymentService.getLogs(appName, 100);
+        return this.deploymentService.getLogs(appName, 1000);
       case 'checkout':
         return this.deploymentService.checkout(appName);
       case 'build':
