@@ -31,6 +31,6 @@ npm-debug.log*
 .env
 .env.local
 
-config
+config/application.properties
 
 ui/package-lock.json

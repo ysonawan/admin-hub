@@ -5,7 +5,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { provideZoneChangeDetection } from '@angular/core';
-import { NgxEchartsModule } from 'ngx-echarts';
 import { ToastrModule } from 'ngx-toastr';
 
 import { AppRoutingModule } from './app-routing.module';
@@ -31,9 +30,6 @@ import {HttpErrorInterceptor} from "./interceptors/http-error.interceptor";
         AppRoutingModule,
         FormsModule,
         ReactiveFormsModule,
-        NgxEchartsModule.forRoot({
-            echarts: () => import('echarts')
-        }),
         ToastrModule.forRoot({
             timeOut: 5000,
             positionClass: 'toast-top-right',
