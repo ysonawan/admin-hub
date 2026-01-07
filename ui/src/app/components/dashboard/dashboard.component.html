@@ -1,0 +1,361 @@
+<div class="">
+  <!-- Main Content -->
+  <div class="pt-8 pb-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Loading State -->
+      <div *ngIf="loading" class="flex items-center justify-center py-20">
+        <div class="text-center">
+          <div class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-400 border-t-blue-600"></div>
+          <p class="mt-4 text-lg text-blue-300 font-medium">Loading applications...</p>
+        </div>
+      </div>
+
+      <!-- Service Status -->
+      <div class="mb-4 text-sm " *ngIf="!loading">
+        <span class="text-blue-400 font-semibold">Linux Application Deployer Service: <span class="font-semibold" [class]="serviceStatus === 'Online' ? 'text-green-400' : serviceStatus === 'Offline' ? 'text-red-400' : 'text-yellow-400'">{{ serviceStatus }}</span></span>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="mb-6" *ngIf="!loading">
+        <div class="relative">
+          <input
+            type="text"
+            [(ngModel)]="filterText"
+            placeholder="🔍 Search applications..."
+            class="w-full px-6 py-3 rounded-lg bg-slate-800 border-2 border-blue-500 text-white placeholder-slate-400 focus:outline-none focus:border-blue-300 transition"
+          />
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="!loading && getFilteredApplications().length === 0" class="text-center py-20">
+        <div class="text-6xl mb-4">📭</div>
+        <p class="text-xl text-slate-400">No applications found</p>
+        <p class="text-slate-500">Configure applications in the linux application deployer service</p>
+      </div>
+
+      <!-- Applications Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6" *ngIf="!loading && getFilteredApplications().length > 0">
+        <button
+          type="button"
+          *ngFor="let app of getFilteredApplications()"
+          (click)="selectApp(app)"
+          [ngClass]="{
+            'ring-2 ring-blue-400 bg-gradient-to-br from-blue-800 to-blue-900 border-blue-500': selectedApp?.name === app.name,
+            'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700': selectedApp?.name !== app.name
+          }"
+          class="rounded-xl p-6 cursor-pointer border-2 hover:border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/30 transform hover:scale-105 w-full text-left"
+        >
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-white">{{ app.name }}</h3>
+              <p class="text-sm text-slate-400">{{ getDescription(app) }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="text-3xl">📦</div>
+              <div *ngIf="app.application_url" class="flex items-center gap-1 text-sm">
+                <div class="w-2 h-2 rounded-full" [class]="appLiveStatus[app.name] === true ? 'bg-green-400 animate-pulse' : appLiveStatus[app.name] === false ? 'bg-red-400' : 'bg-yellow-400 animate-pulse'"></div>
+                <span class="text-sm" [class]="appLiveStatus[app.name] === true ? 'text-green-400 animate-pulse' : appLiveStatus[app.name] === false ? 'text-red-400' : 'text-yellow-400 animate-pulse'">
+                  {{ appLiveStatus[app.name] === true ? 'Live' : appLiveStatus[app.name] === false ? 'Offline' : 'Checking' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2 text-sm text-slate-300 mb-4" >
+              <p><span *ngIf="app.application_url" class="text-blue-400 font-semibold">Application URL: </span> <a *ngIf="app.application_url" href="{{ app.application_url }}" target="_blank" class="text-blue-300 hover:text-blue-200 underline break-all">{{ app.application_url }}</a></p>
+            <p><span *ngIf="app.git_url" class="text-blue-400 font-semibold">Repository: </span> <span class="text-white break-all ">{{ app.git_url }}</span></p>
+          </div>
+
+          <div class="flex gap-2">
+            <button
+              (click)="selectApp(app); executeAction('status'); $event.stopPropagation()"
+              [disabled]="isActionActive('status')"
+              class="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white rounded-lg text-sm font-medium transition flex items-center justify-center gap-1"
+            >
+              <span *ngIf="!isActionActive('status')">📊 Status</span>
+              <span *ngIf="isActionActive('status')" class="flex items-center gap-1">
+                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" fill="currentColor"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Loading
+              </span>
+            </button>
+            <button
+              (click)="selectApp(app); executeAction('logs'); $event.stopPropagation()"
+              [disabled]="isActionActive('logs')"
+              class="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-slate-600 text-white rounded-lg text-sm font-medium transition flex items-center justify-center gap-1"
+            >
+              <span *ngIf="!isActionActive('logs')">📝 Logs</span>
+              <span *ngIf="isActionActive('logs')" class="flex items-center gap-1">
+                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" fill="currentColor"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Loading
+              </span>
+            </button>
+          </div>
+        </button>
+      </div>
+
+      <!-- Detailed Actions Panel -->
+      <div *ngIf="selectedApp && !loading" class="mt-8 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl border-2 border-blue-500 p-8 shadow-2xl mb-6">
+        <div class="mb-6">
+          <h2 class="text-2xl font-bold text-white mb-2">{{ selectedApp.name }}</h2>
+          <p class="text-slate-400">{{ getDescription(selectedApp) }}</p>
+        </div>
+
+        <!-- Application Details -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 p-4 bg-slate-700/50 rounded-lg">
+            <div *ngIf="selectedApp.application_url">
+                <p class="text-sm"><span class="text-blue-400 font-semibold">🌐 Application URL: </span> <a href="{{ selectedApp.application_url }}" target="_blank" class="text-blue-300 hover:text-blue-200 underline break-all">{{ selectedApp.application_url }}</a></p>
+            </div>
+          <div *ngIf="selectedApp.git_url">
+              <p class="text-sm"><span class="text-blue-400 font-semibold">📦 Repository: </span> <span class="text-white break-all ">{{ selectedApp.git_url }}</span></p>
+          </div>
+          <div *ngIf="selectedApp.branch">
+              <p class="text-sm"><span class="text-blue-400 font-semibold">🌿 Branch: </span> <span class="text-white break-all ">{{ selectedApp.branch }}</span></p>
+          </div>
+          <div *ngIf="selectedApp.service_name">
+              <p class="text-sm"><span class="text-blue-400 font-semibold">⚙️ Service Name: </span> <span class="text-white break-all ">{{ selectedApp.service_name }}</span></p>
+          </div>
+          <div *ngIf="selectedApp.deploy_path">
+              <p class="text-sm"><span class="text-blue-400 font-semibold">📁 Deploy Path: </span> <span class="text-white break-all ">{{ selectedApp.deploy_path }}</span></p>
+          </div>
+          <div *ngIf="selectedApp.build_type">
+              <p class="text-sm"><span class="text-blue-400 font-semibold">🔨 Build Type: </span> <span class="text-white break-all ">{{ selectedApp.build_type }}</span></p>
+          </div>
+          <div *ngIf="selectedApp.artifact_path">
+              <p class="text-sm"><span class="text-blue-400 font-semibold">📦 Artifact Path: </span> <span class="text-white break-all ">{{ selectedApp.artifact_path }}</span></p>
+          </div>
+          <div *ngIf="selectedApp.symlink">
+              <p class="text-sm"><span class="text-blue-400 font-semibold">🔗 Symlink: </span> <span class="text-white break-all ">{{ selectedApp.symlink }}</span></p>
+          </div>
+
+        </div>
+
+        <!-- Actions Tabs -->
+        <div class="mb-6">
+          <p class="text-slate-400 text-sm font-semibold mb-4">Available Actions</p>
+          <div class="grid grid-cols-2 lg:grid-cols-8 gap-3">
+            <button
+              *ngFor="let action of actions"
+              (click)="executeAction(action.id)"
+              [disabled]="isActionActive(action.id)"
+              [ngClass]="{
+                'bg-blue-600': selectedAction === action.id,
+                'hover:bg-blue-500': selectedAction !== action.id,
+                'disabled:bg-slate-600': isActionActive(action.id)
+              }"
+              class="px-2 md:px-4 py-3 rounded-lg font-semibold text-white transition-all border border-blue-400/50 hover:border-blue-400 text-sm flex flex-col items-center gap-1"
+            >
+              <span class="text-lg">{{ action.icon }}</span>
+              <span class="text-xs font-bold">{{ action.label }}</span>
+              <span *ngIf="isActionActive(action.id)" class="text-xs animate-pulse">Processing...</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Full Deploy Button -->
+        <div class="border-t border-blue-500/30 pt-6">
+          <button
+            (click)="executeAction('full-deploy')"
+            [disabled]="isActionActive('full-deploy')"
+            class="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:from-slate-600 disabled:to-slate-600 text-white rounded-lg font-bold text-base transition-all shadow-lg hover:shadow-purple-500/50 flex items-center justify-center gap-2"
+          >
+            <span *ngIf="!isActionActive('full-deploy')" class="flex items-center gap-2">
+              🎯 Execute Full Deployment Pipeline
+            </span>
+            <span *ngIf="isActionActive('full-deploy')" class="flex items-center gap-2">
+              <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" fill="currentColor"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              Deploying...
+            </span>
+          </button>
+          <p class="text-sm text-slate-400 text-center mt-2">Runs: checkout → build → verify → deploy → restart → status</p>
+        </div>
+
+        <!-- Response Display -->
+        <div *ngIf="deploymentResponse" class="mt-8 border-t border-blue-500/30 pt-6">
+          <div
+            [class]="deploymentResponse.success ? 'bg-green-900/30 border-l-green-500' : 'bg-red-900/30 border-l-red-500'"
+            class="rounded-lg p-4 border-l-4"
+          >
+            <p
+              class="text-sm font-semibold mb-2"
+              [class]="deploymentResponse.success ? 'text-green-300' : 'text-red-300'"
+            >
+              {{ deploymentResponse.success ? '✓ Success' : '✗ Failed' }}: {{ deploymentResponse.action }}
+            </p>
+            <p class="text-slate-300 text-sm">{{ deploymentResponse.message }}</p>
+          </div>
+        </div>
+      </div>
+        <!-- Server Overview -->
+        <div class="mb-6" *ngIf="!loading">
+            <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl border-2 border-blue-500 p-6 shadow-2xl">
+                <h3 class="text-xl font-bold text-white mb-4">🖥️ Server Overview</h3>
+
+                <!-- Server Health -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-slate-700 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-400">CPU Usage</p>
+                                <p class="text-2xl font-bold text-white" *ngIf="!serverLoading && serverHealth">{{ serverHealth.cpuUsage }}%</p>
+                                <p class="text-sm text-slate-500" *ngIf="serverLoading">Loading...</p>
+                            </div>
+                            <div class="text-3xl">🖥️</div>
+                        </div>
+                        <div class="mt-2 bg-slate-600 rounded-full h-2">
+                            <div class="bg-blue-500 h-2 rounded-full" [style.width.%]="serverHealth?.cpuUsage || 0"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-700 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-400">Memory Usage</p>
+                                <p class="text-2xl font-bold text-white" *ngIf="!serverLoading && serverHealth">{{ serverHealth.memoryUsage | number:'1.2-2' }}%</p>
+                                <p class="text-sm text-slate-500" *ngIf="serverLoading">Loading...</p>
+                            </div>
+                            <div class="text-3xl">💾</div>
+                        </div>
+                        <div class="mt-2 bg-slate-600 rounded-full h-2">
+                            <div class="bg-green-500 h-2 rounded-full" [style.width.%]="serverHealth?.memoryUsage || 0"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-700 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-400">Disk Usage</p>
+                                <p class="text-2xl font-bold text-white" *ngIf="!serverLoading && serverHealth">{{ serverHealth.diskUsage | number:'1.2-2' }}%</p>
+                                <p class="text-sm text-slate-500" *ngIf="serverLoading">Loading...</p>
+                            </div>
+                            <div class="text-3xl">💿</div>
+                        </div>
+                        <div class="mt-2 bg-slate-600 rounded-full h-2">
+                            <div class="bg-yellow-500 h-2 rounded-full" [style.width.%]="serverHealth?.diskUsage || 0"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-700 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-400">Load Average</p>
+                                <p class="text-2xl font-bold text-white" *ngIf="!serverLoading && serverHealth">{{ serverHealth.loadAverage }}</p>
+                                <p class="text-sm text-slate-500" *ngIf="serverLoading">Loading...</p>
+                            </div>
+                            <div class="text-3xl">⚡</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Running Services -->
+                <div>
+                    <button
+                        (click)="showRunningServices = !showRunningServices"
+                        class="w-full flex items-center justify-between p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition cursor-pointer mb-3"
+                    >
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg">⚙️</span>
+                            <h4 class="text-lg font-semibold text-white">Running Services ({{ runningServices.length }})</h4>
+                        </div>
+                        <span
+                            class="text-xl text-slate-400 transition-transform"
+                            [class.rotate-180]="showRunningServices"
+                        >
+                            ▼
+                        </span>
+                    </button>
+
+                    <div *ngIf="showRunningServices" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div *ngFor="let service of runningServices" class="bg-slate-700 rounded-lg p-3">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-white">{{ service.name }}</p>
+                                    <p class="text-xs text-slate-400" *ngIf="service.description">{{ service.description }}</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    @if (service.status === 'active running') {
+                                        <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                        <span class="text-xs text-green-400">{{ service.status }}</span>
+                                    } @else {
+                                        <div class="w-2 h-2 bg-red-400 rounded-full"></div>
+                                        <span class="text-xs text-red-400">{{ service.status }}</span>
+                                    }
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div *ngIf="showRunningServices && runningServices.length === 0" class="text-center py-4 text-slate-400">
+                        No running services found
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <!-- Logs Modal -->
+  <div *ngIf="showLogsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-slate-800 rounded-xl border-2 border-blue-500 max-w-2xl w-full max-h-96 overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between p-6 border-b border-blue-500/30">
+        <h3 class="text-xl font-bold text-white">📝 Application Logs</h3>
+        <button
+          (click)="closeLogsModal()"
+          class="text-slate-400 hover:text-white transition text-2xl"
+        >
+          ✕
+        </button>
+      </div>
+      <div class="overflow-y-auto flex-1 p-6 bg-slate-900">
+        <pre class="text-slate-300 text-sm whitespace-pre-wrap break-words">{{ logsContent }}</pre>
+      </div>
+      <div class="flex gap-3 p-6 border-t border-blue-500/30">
+        <button
+          (click)="copyToClipboard(logsContent)"
+          class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition"
+        >
+          📋 Copy Logs
+        </button>
+        <button
+          (click)="closeLogsModal()"
+          class="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Modal -->
+  <div *ngIf="showStatusModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-slate-800 rounded-xl border-2 border-blue-500 max-w-2xl w-full max-h-96 overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between p-6 border-b border-blue-500/30">
+        <h3 class="text-xl font-bold text-white">📊 Application Status</h3>
+        <button
+          (click)="closeStatusModal()"
+          class="text-slate-400 hover:text-white transition text-2xl"
+        >
+          ✕
+        </button>
+      </div>
+      <div class="overflow-y-auto flex-1 p-6 bg-slate-900">
+        <pre class="text-slate-300 text-sm whitespace-pre-wrap break-words">{{ statusContent }}</pre>
+      </div>
+      <div class="flex gap-3 p-6 border-t border-blue-500/30">
+        <button
+          (click)="copyToClipboard(statusContent)"
+          class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition"
+        >
+          📋 Copy Status
+        </button>
+        <button
+          (click)="closeStatusModal()"
+          class="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+

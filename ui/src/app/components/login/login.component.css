@@ -1,0 +1,15 @@
+/* Login Component - Using Tailwind CSS */
+
+/* Custom spinner animation for loading state */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 1024px) {
+  /* Info section hidden on mobile via Tailwind classes */
+}
+
+@media (max-width: 480px) {
+  /* Mobile adjustments handled by Tailwind responsive classes */
+}

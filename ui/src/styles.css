@@ -1,0 +1,93 @@
+/* Critical Base Styles - Load First to Prevent FOUC */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f5f7fa;
+  color: #333;
+  line-height: 1.6;
+}
+
+/* Tailwind CSS */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Toastr Custom Styles - Ensure proper display in production */
+#toast-container {
+  z-index: 999999 !important;
+  pointer-events: none;
+  position: fixed;
+}
+
+#toast-container > div {
+  pointer-events: auto;
+  opacity: 1 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  margin-bottom: 10px;
+}
+
+.toast-top-right {
+  top: 12px !important;
+  right: 12px !important;
+}
+
+.toast-success {
+  background-color: #51a351 !important;
+  color: white !important;
+}
+
+.toast-error {
+  background-color: #bd362f !important;
+  color: white !important;
+}
+
+.toast-info {
+  background-color: #2f96b4 !important;
+  color: white !important;
+}
+
+.toast-warning {
+  background-color: #f89406 !important;
+  color: white !important;
+}
+
+/* Custom Global Styles */
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-weight: 600;
+}
+
+button {
+  font-family: inherit;
+}
+
+input, select, textarea {
+  font-family: inherit;
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+
