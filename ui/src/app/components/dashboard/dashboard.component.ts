@@ -309,4 +309,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       }
     );
   }
+
+  refreshDashboard(): void {
+    this.loadApplications();
+    this.loadServerData();
+    this.checkDeployerHealth();
+  }
 }

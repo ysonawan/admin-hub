@@ -14,6 +14,11 @@ export interface ServerHealthSummary {
   memoryUsage: number;
   diskUsage: number;
   loadAverage: number;
+  totalMemory?: string;
+  usedMemory?: string;
+  uptime?: string;
+  usedDisk?: string;
+  totalDisk?: string;
 }
 
 @Injectable({

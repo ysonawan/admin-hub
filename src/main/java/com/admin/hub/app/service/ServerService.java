@@ -149,18 +149,17 @@ public class ServerService {
                 Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
                 if (data != null) {
                     double cpu = parseCpuUsage((String) data.get("cpu"));
-                    double memory = parseMemoryUsage((String) data.get("memory"));
-                    double disk = parseDiskUsage((String) data.get("disk"));
-                    double load = parseLoadAverage((String) data.get("load_average"));
+                    double memory = parseMemoryUsage((String) data.get("memory"), summary);
+                    double disk = parseDiskUsage((String) data.get("disk"), summary);
+                    parseUptime((String) data.get("load_average"), summary);
 
                     // Clamp values to valid ranges for UI display
-                    summary.setCpuUsage(Math.max(0.0, Math.min(100.0, cpu)));
+                    summary.setCpuUsage(Math.max(0.0, cpu));
                     summary.setMemoryUsage(Math.max(0.0, Math.min(100.0, memory)));
                     summary.setDiskUsage(Math.max(0.0, Math.min(100.0, disk)));
-                    summary.setLoadAverage(Math.max(0.0, load));
 
-                    log.info("Server health: CPU={}%, Memory={}%, Disk={}%, Load={}",
-                             cpu, memory, disk, load);
+                    log.info("Server health: CPU={}%, Memory={}% (Total: {}, Used: {}), Disk={}% (Used: {}, Available: {}), Uptime: {}",
+                             cpu, memory, summary.getTotalMemory(), summary.getUsedMemory(), disk, summary.getUsedDisk(), summary.getTotalDisk(), summary.getUptime());
                 }
             }
         } catch (RestClientException e) {
@@ -180,12 +179,11 @@ public class ServerService {
             //         0  0      0 3720824 124728 2857108    0    0    19    34  434    1  1  0 99  0  0  0
             String[] lines = cpuData.split("\n");
             if (lines.length >= 3) {
-                String[] parts = lines[2].trim().split("\\s+");
+                String[] parts = lines[3].trim().split("\\s+");
                 if (parts.length >= 15) {
-                    int usIndex = parts.length - 4;  // us (user)
-
-                    double user = Double.parseDouble(parts[usIndex]);
-                    return (100-user);  // CPU usage = user + system
+                    int idleIndex = parts.length - 4;
+                    double user = Double.parseDouble(parts[idleIndex]);
+                    return (100-user);  // CPU usage = 100 - idle
                 }
             }
         } catch (Exception e) {
@@ -194,7 +192,7 @@ public class ServerService {
         return 0.0;
     }
 
-    private double parseMemoryUsage(String memoryData) {
+    private double parseMemoryUsage(String memoryData, ServerHealthSummary summary) {
         if (memoryData == null) return 0.0;
         try {
             // Parse free output: "Mem:           7.8Gi       1.8Gi       3.5Gi       174Mi       2.8Gi       6.0Gi"
@@ -206,8 +204,15 @@ public class ServerService {
                         // parts[0] = "Mem:"
                         // parts[1] = total
                         // parts[2] = used
-                        double total = parseSize(parts[1]);
-                        double used = parseSize(parts[2]);
+                        String totalStr = parts[1];
+                        String usedStr = parts[2];
+
+                        // Store raw memory values for display
+                        summary.setTotalMemory(totalStr);
+                        summary.setUsedMemory(usedStr);
+
+                        double total = parseSize(totalStr);
+                        double used = parseSize(usedStr);
                         return (used / total) * 100;
                     }
                 }
@@ -218,15 +223,24 @@ public class ServerService {
         return 0.0;
     }
 
-    private double parseDiskUsage(String diskData) {
+    private double parseDiskUsage(String diskData, ServerHealthSummary summary) {
         if (diskData == null) return 0.0;
         try {
             // Parse df output for root filesystem (/)
+            // Example: /dev/sda        157G   12G  138G   8% /
             String[] lines = diskData.split("\n");
             for (String line : lines) {
                 if (line.contains("/dev/") && line.trim().endsWith("/")) {
                     String[] parts = line.trim().split("\\s+");
                     if (parts.length >= 5) {
+                        // Extract used and available disk values
+                        // Format: Filesystem Size Used Avail Use% Mounted
+                        // parts[1] = Size, parts[2] = Used, parts[3] = Available, parts[4] = Use%
+                        String usedStr = parts[2];
+                        String totalStr = parts[1];
+                        summary.setUsedDisk(usedStr);
+                        summary.setTotalDisk(totalStr);
+
                         // Find the percentage column (before the mount point)
                         for (int i = 0; i < parts.length - 1; i++) {
                             if (parts[i].endsWith("%")) {
@@ -243,20 +257,34 @@ public class ServerService {
         return 0.0;
     }
 
-    private double parseLoadAverage(String loadData) {
-        if (loadData == null) return 0.0;
+    private void parseUptime(String uptimeData, ServerHealthSummary summary) {
+        if (uptimeData == null) {
+            summary.setUptime("Unknown");
+            return;
+        }
         try {
-            // Parse uptime output: "load average: 0.00, 0.01, 0.00"
-            // Extract the first load average value (1-minute average)
-            Pattern pattern = Pattern.compile("load average:\\s*([\\d.]+)");
-            Matcher matcher = pattern.matcher(loadData);
+            // Parse uptime output: "21:00 up 5 days, 6:13, 6 users, load averages: 9.80 12.14 16.29"
+            // Extract the part between "up" and the number of users/load
+            Pattern pattern = Pattern.compile("up\\s+(.+?),\\s+\\d+\\s+user");
+            Matcher matcher = pattern.matcher(uptimeData);
             if (matcher.find()) {
-                return Double.parseDouble(matcher.group(1));
+                String uptime = matcher.group(1).trim();
+                summary.setUptime(uptime);
+            } else {
+                // Fallback: try to extract everything after "up"
+                Pattern fallbackPattern = Pattern.compile("up\\s+(.+?)(?:,\\s+\\d+\\s+user|$)");
+                Matcher fallbackMatcher = fallbackPattern.matcher(uptimeData);
+                if (fallbackMatcher.find()) {
+                    String uptime = fallbackMatcher.group(1).trim();
+                    summary.setUptime(uptime);
+                } else {
+                    summary.setUptime("Unknown");
+                }
             }
         } catch (Exception e) {
-            log.error("Error parsing load average", e);
+            log.error("Error parsing uptime", e);
+            summary.setUptime("Unknown");
         }
-        return 0.0;
     }
 
     private double parseSize(String sizeStr) {

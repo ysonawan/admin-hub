@@ -10,4 +10,9 @@ public class ServerHealthSummary {
     private double memoryUsage = 0.0;
     private double diskUsage = 0.0;
     private double loadAverage = 0.0;
+    private String totalMemory;
+    private String usedMemory;
+    private String uptime;
+    private String usedDisk;
+    private String totalDisk;
 }
