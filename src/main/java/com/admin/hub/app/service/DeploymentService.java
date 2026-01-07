@@ -1,0 +1,275 @@
+package com.admin.hub.app.service;
+
+import com.admin.hub.app.config.DeployerProperties;
+import com.admin.hub.app.dto.ApplicationConfiguration;
+import com.admin.hub.app.dto.ConfigurationResponse;
+import com.admin.hub.app.dto.DeploymentResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class DeploymentService {
+
+    private final RestTemplate restTemplate;
+    private final DeployerProperties deployerProperties;
+
+    /**
+     * Get configuration and available applications
+     */
+    public List<ApplicationConfiguration> getApplications() {
+        try {
+            String url = deployerProperties.getBaseUrl() + "/api/v1/configuration";
+            HttpEntity<String> entity = createRequestEntity();
+
+            log.info("Fetching applications from: {}", url);
+            ResponseEntity<ConfigurationResponse> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, ConfigurationResponse.class
+            );
+
+            if (response.getBody() != null) {
+                Map<String, ApplicationConfiguration> appsMap = response.getBody().getApplicationsMap();
+                if (appsMap != null && !appsMap.isEmpty()) {
+                    return new ArrayList<>(appsMap.values());
+                }
+            }
+            return new ArrayList<>();
+        } catch (RestClientException e) {
+            log.error("Error fetching applications configuration", e);
+            throw new IllegalStateException("Failed to fetch applications from deployer service: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Checkout/clone or update repository
+     */
+    public DeploymentResponse checkout(String applicationName) {
+        return executeDeploymentAction(
+                applicationName,
+                "/api/v1/repository/checkout/" + applicationName,
+                HttpMethod.POST,
+                "checkout"
+        );
+    }
+
+    /**
+     * Build the application
+     */
+    public DeploymentResponse build(String applicationName) {
+        return executeDeploymentAction(
+                applicationName,
+                "/api/v1/build/application/" + applicationName,
+                HttpMethod.POST,
+                "build"
+        );
+    }
+
+    /**
+     * Verify the build artifact
+     */
+    public DeploymentResponse verify(String applicationName) {
+        return executeDeploymentAction(
+                applicationName,
+                "/api/v1/artifact/verify/" + applicationName,
+                HttpMethod.POST,
+                "verify"
+        );
+    }
+
+    /**
+     * Deploy the artifact
+     */
+    public DeploymentResponse deploy(String applicationName) {
+        return executeDeploymentAction(
+                applicationName,
+                "/api/v1/deployment/deploy/" + applicationName,
+                HttpMethod.POST,
+                "deploy"
+        );
+    }
+
+    /**
+     * Restart the application service
+     */
+    public DeploymentResponse restart(String applicationName) {
+        return executeDeploymentAction(
+                applicationName,
+                "/api/v1/application/restart/" + applicationName,
+                HttpMethod.POST,
+                "restart"
+        );
+    }
+
+    /**
+     * Stop the application service
+     */
+    public DeploymentResponse stop(String applicationName) {
+        return executeDeploymentAction(
+                applicationName,
+                "/api/v1/application/stop/" + applicationName,
+                HttpMethod.POST,
+                "stop"
+        );
+    }
+
+    /**
+     * Get application status
+     */
+    public DeploymentResponse getStatus(String applicationName) {
+        return executeDeploymentAction(
+                applicationName,
+                "/api/v1/application/status/" + applicationName,
+                HttpMethod.GET,
+                "status"
+        );
+    }
+
+    /**
+     * Get application logs
+     */
+    public DeploymentResponse getLogs(String applicationName, Integer lines) {
+        String endpoint = "/api/v1/application/logs/" + applicationName;
+        if (lines != null && lines > 0) {
+            endpoint += "?lines=" + Math.min(lines, 10000);
+        }
+        return executeDeploymentAction(
+                applicationName,
+                endpoint,
+                HttpMethod.GET,
+                "logs"
+        );
+    }
+
+    /**
+     * Full deployment workflow: checkout → build → verify → deploy → restart → status
+     */
+    public DeploymentResponse fullDeploy(String applicationName) {
+        return executeDeploymentAction(
+                applicationName,
+                "/api/v1/deployment/workflow/full-deploy/" + applicationName,
+                HttpMethod.POST,
+                "full-deploy"
+        );
+    }
+
+    /**
+     * Health check
+     */
+    public boolean healthCheck() {
+        try {
+            String url = deployerProperties.getBaseUrl() + "/health";
+            HttpEntity<String> entity = createRequestEntity();
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, String.class
+            );
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (RestClientException e) {
+            log.error("Health check failed", e);
+            return false;
+        }
+    }
+
+    /**
+     * Check if application is live by testing the application URL
+     */
+    public boolean checkAppLiveStatus(String applicationName) {
+        try {
+            // Get application configuration to find the URL
+            List<ApplicationConfiguration> apps = getApplications();
+            ApplicationConfiguration app = apps.stream()
+                    .filter(a -> a.getName().equals(applicationName))
+                    .findFirst()
+                    .orElse(null);
+
+            if (app == null || app.getApplicationUrl() == null || app.getApplicationUrl().isEmpty()) {
+                log.warn("Application {} not found or has no URL configured", applicationName);
+                return false;
+            }
+
+            String url = app.getApplicationUrl();
+            log.info("Checking live status for {} at: {}", applicationName, url);
+
+            // Make a simple GET request to the application URL
+            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            boolean isLive = response.getStatusCode().is2xxSuccessful();
+
+            log.info("Application {} live status: {}", applicationName, isLive);
+            return isLive;
+
+        } catch (RestClientException e) {
+            log.warn("Failed to check live status for {}: {}", applicationName, e.getMessage());
+            return false;
+        } catch (Exception e) {
+            log.error("Unexpected error checking live status for {}", applicationName, e);
+            return false;
+        }
+    }
+
+    /**
+     * Generic method to execute deployment actions
+     */
+    private DeploymentResponse executeDeploymentAction(
+            String applicationName,
+            String endpoint,
+            HttpMethod method,
+            String action) {
+        try {
+            String url = deployerProperties.getBaseUrl() + endpoint;
+            HttpEntity<String> entity = createRequestEntity();
+
+            log.info("Executing {} action for {} at: {}", action, applicationName, url);
+            ResponseEntity<Object> response = restTemplate.exchange(
+                    url, method, entity, Object.class
+            );
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                return DeploymentResponse.builder()
+                        .applicationName(applicationName)
+                        .action(action)
+                        .success(true)
+                        .message("Action completed successfully")
+                        .data(response.getBody())
+                        .build();
+            } else {
+                return DeploymentResponse.builder()
+                        .applicationName(applicationName)
+                        .action(action)
+                        .success(false)
+                        .message("Action failed with status: " + response.getStatusCode())
+                        .build();
+            }
+        } catch (RestClientException e) {
+            log.error("Error executing {} for {}: {}", action, applicationName, e.getMessage(), e);
+            return DeploymentResponse.builder()
+                    .applicationName(applicationName)
+                    .action(action)
+                    .success(false)
+                    .message("Error: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    /**
+     * Create HTTP headers with API key
+     */
+    private HttpEntity<String> createRequestEntity() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Content-Type", "application/json");
+        if (deployerProperties.getApiKey() != null && !deployerProperties.getApiKey().isEmpty()) {
+            headers.set("X-API-Key", deployerProperties.getApiKey());
+        }
+        return new HttpEntity<>(headers);
+    }
+}

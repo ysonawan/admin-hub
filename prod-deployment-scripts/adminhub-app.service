@@ -1,0 +1,40 @@
+[Unit]
+Description=Admin Hub Application
+
+After=network.target nginx.service postgresql.service
+Requires=nginx.service postgresql.service
+
+[Service]
+Restart=always
+RestartSec=5
+User=root
+WorkingDirectory=/opt/app/admin-hub
+
+# JVM memory flags for 1GB server - VERY conservative
+ExecStart=/usr/bin/java \
+  -Xmx512m \
+  -Xms128m \
+  -XX:MaxDirectMemorySize=128m \
+  -XX:MaxMetaspaceSize=128m \
+  -XX:MetaspaceSize=64m \
+  -XX:+UseG1GC \
+  -XX:MaxGCPauseMillis=500 \
+  -XX:G1HeapRegionSize=4m \
+  -Xss128k \
+  -XX:+UseCompressedOops \
+  -XX:+UseCompressedClassPointers \
+  -Xlog:gc*:file=/var/log/admin-hub/gc.log:time,uptime:filecount=5,filesize=10m \
+  -jar /opt/app/admin-hub/admin-hub.jar
+
+SuccessExitStatus=143
+
+# Systemd memory limits for 1GB server
+MemoryLimit=512M
+MemoryHigh=384M
+CPUQuota=50%
+
+# Aggressive OOM protection
+OOMScoreAdjust=-800
+
+[Install]
+WantedBy=multi-user.target

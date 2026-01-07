@@ -1,0 +1,34 @@
+.github
+target
+# Frontend
+ui/dist/
+ui/node_modules/
+ui/.angular/
+ui/.vscode/
+ui/build/
+
+# Backend
+backend/.env
+backend/__pycache__/
+backend/venv/
+backend/.venv/
+backend/*.pyc
+backend/.pytest_cache/
+backend/.coverage
+
+# IDE
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+config
