@@ -36,8 +36,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   showRunningServices = false;
 
   actions = [
-    { id: 'status', label: 'Status', icon: '📊', color: 'blue' },
-    { id: 'logs', label: 'Logs', icon: '📝', color: 'gray' },
     { id: 'checkout', label: 'Checkout', icon: '🔄', color: 'purple' },
     { id: 'build', label: 'Build', icon: '🔨', color: 'yellow' },
     { id: 'verify', label: 'Verify', icon: '✓', color: 'green' },
