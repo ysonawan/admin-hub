@@ -13,7 +13,7 @@ export class AuthService {
   public currentUser: Observable<AuthResponse | null>;
 
   constructor(private http: HttpClient) {
-    const storedUser = localStorage.getItem('currentUser');
+    const storedUser = localStorage.getItem('adminhub-current-user');
     this.currentUserSubject = new BehaviorSubject<AuthResponse | null>(
       storedUser ? JSON.parse(storedUser) : null
     );
@@ -32,16 +32,16 @@ export class AuthService {
     return this.http.post<AuthResponse>(`${this.apiUrl}/auth/login`, credentials)
       .pipe(
         tap(response => {
-          localStorage.setItem('currentUser', JSON.stringify(response));
-          localStorage.setItem('token', response.token);
+          localStorage.setItem('adminhub-current-user', JSON.stringify(response));
+          localStorage.setItem('adminhub-token', response.token);
           this.currentUserSubject.next(response);
         })
       );
   }
 
   logout(): void {
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('token');
+    localStorage.removeItem('adminhub-current-user');
+    localStorage.removeItem('adminhub-token');
     this.currentUserSubject.next(null);
   }
 
