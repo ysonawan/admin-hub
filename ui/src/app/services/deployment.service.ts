@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment.development';
+import { AuthService } from './auth.service';
 
 export interface ApplicationConfig {
   name: string;
@@ -33,7 +34,7 @@ export class DeploymentService {
   private apiUrl = environment.apiUrl || 'http://localhost:8089/api';
   private deploymentBaseUrl = `${this.apiUrl}/deployment`;
 
-  constructor(private http: HttpClient) { }
+  constructor(private http: HttpClient, private authService: AuthService) { }
 
   /**
    * Check health of deployment service
@@ -155,5 +156,122 @@ export class DeploymentService {
    */
   checkAppLiveStatus(appName: string): Observable<any> {
     return this.http.get(`${this.deploymentBaseUrl}/applications/${appName}/health`);
+  }
+
+  /**
+   * Subscribe to health and app status updates via SSE
+   */
+  subscribeToHealthAndAppStatus(): Observable<any> {
+    return new Observable(observer => {
+      const token = this.authService.token;
+      const url = `${this.deploymentBaseUrl}/health/stream`;
+      let abortController: AbortController | null = null;
+
+      if (!token) {
+        observer.error(new Error('No authentication token available'));
+        return () => {};
+      }
+
+      // Use AbortController for cleaner cancellation
+      abortController = new AbortController();
+
+      fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        signal: abortController.signal
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.body;
+        })
+        .then(body => {
+          if (!body) {
+            throw new Error('No response body');
+          }
+
+          const reader = body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          const processStream = async () => {
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) {
+                  if (buffer.trim()) {
+                    this.parseSSEEvent(buffer, observer);
+                  }
+                  observer.complete();
+                  break;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                const parts = buffer.split('\n\n');
+
+                // Process complete events
+                for (let i = 0; i < parts.length - 1; i++) {
+                  if (parts[i].trim()) {
+                    this.parseSSEEvent(parts[i], observer);
+                  }
+                }
+
+                // Keep incomplete event in buffer
+                buffer = parts[parts.length - 1];
+              }
+            } catch (error: any) {
+              if (error.name !== 'AbortError') {
+                observer.error(error);
+              }
+            }
+          };
+
+          processStream();
+        })
+        .catch((error: any) => {
+          if (error.name !== 'AbortError') {
+            observer.error(error);
+          }
+        });
+
+      return () => {
+        if (abortController) {
+          abortController.abort();
+        }
+      };
+    });
+  }
+
+  /**
+   * Parse Server-Sent Events format
+   */
+  private parseSSEEvent(eventString: string, observer: any): void {
+    const lines = eventString.split('\n');
+    const event: { [key: string]: string } = {};
+
+    for (const line of lines) {
+      if (line.startsWith('event:')) {
+        event['event'] = line.substring(6).trim();
+      } else if (line.startsWith('data:')) {
+        event['data'] = line.substring(5).trim();
+      } else if (line.startsWith('id:')) {
+        event['id'] = line.substring(3).trim();
+      }
+    }
+
+    if (event['data'] && event['event']) {
+      try {
+        observer.next({
+          type: event['event'],
+          data: JSON.parse(event['data'])
+        });
+      } catch (error) {
+        console.error('Error parsing SSE event data:', error);
+      }
+    }
   }
 }

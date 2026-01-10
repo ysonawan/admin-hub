@@ -6,12 +6,16 @@ import com.admin.hub.app.service.DeploymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @RestController
 @RequestMapping("/api/deployment")
@@ -20,6 +24,11 @@ import java.util.Map;
 public class DeploymentController {
 
     private final DeploymentService deploymentService;
+    private final List<SseEmitter> healthEmitters = new CopyOnWriteArrayList<>();
+    private final List<SseEmitter> appsStatusEmitters = new CopyOnWriteArrayList<>();
+
+    private static final String HEALTHY_KEY = "healthy";
+    private static final String MESSAGE_KEY = "message";
 
     /**
      * Health check
@@ -28,8 +37,8 @@ public class DeploymentController {
     public ResponseEntity<Map<String, Object>> health() {
         Map<String, Object> response = new HashMap<>();
         boolean isHealthy = deploymentService.healthCheck();
-        response.put("healthy", isHealthy);
-        response.put("message", isHealthy ? "Deployer service is healthy" : "Deployer service is unavailable");
+        response.put(HEALTHY_KEY, isHealthy);
+        response.put(MESSAGE_KEY, isHealthy ? "Deployer service is healthy" : "Deployer service is unavailable");
         return ResponseEntity.ok(response);
     }
 
@@ -286,15 +295,78 @@ public class DeploymentController {
             Map<String, Object> response = new HashMap<>();
             response.put("applicationName", applicationName);
             response.put("live", isLive);
-            response.put("message", isLive ? "Application is live" : "Application is not responding");
+            response.put(MESSAGE_KEY, isLive ? "Application is live" : "Application is not responding");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Error checking live status for {}", applicationName, e);
             Map<String, Object> response = new HashMap<>();
             response.put("applicationName", applicationName);
             response.put("live", false);
-            response.put("message", "Error checking application status: " + e.getMessage());
+            response.put(MESSAGE_KEY, "Error checking application status: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * SSE endpoint for deployment health and app status updates
+     */
+    @GetMapping(value = "/health/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamHealthAndApps() {
+        SseEmitter emitter = new SseEmitter(300000L); // 5 minutes timeout
+        healthEmitters.add(emitter);
+        appsStatusEmitters.add(emitter);
+
+        // Set up callbacks for cleanup
+        emitter.onCompletion(() -> {
+            healthEmitters.remove(emitter);
+            appsStatusEmitters.remove(emitter);
+        });
+        emitter.onTimeout(() -> {
+            healthEmitters.remove(emitter);
+            appsStatusEmitters.remove(emitter);
+        });
+        emitter.onError(throwable -> {
+            healthEmitters.remove(emitter);
+            appsStatusEmitters.remove(emitter);
+            log.debug("SSE connection error", throwable);
+        });
+
+        return emitter;
+    }
+
+    /**
+     * Method to broadcast health updates to all connected clients
+     */
+    public void broadcastHealthUpdate(Map<String, Object> healthData) {
+        for (SseEmitter emitter : healthEmitters) {
+            try {
+                emitter.send(SseEmitter.event()
+                        .id(String.valueOf(System.currentTimeMillis()))
+                        .name("health")
+                        .data(healthData)
+                        .reconnectTime(1000));
+            } catch (IOException e) {
+                healthEmitters.remove(emitter);
+                log.error("Error sending health update to emitter", e);
+            }
+        }
+    }
+
+    /**
+     * Method to broadcast app status updates to all connected clients
+     */
+    public void broadcastAppStatusUpdate(Map<String, Object> appStatusData) {
+        for (SseEmitter emitter : appsStatusEmitters) {
+            try {
+                emitter.send(SseEmitter.event()
+                        .id(String.valueOf(System.currentTimeMillis()))
+                        .name("appStatus")
+                        .data(appStatusData)
+                        .reconnectTime(1000));
+            } catch (IOException e) {
+                appsStatusEmitters.remove(emitter);
+                log.error("Error sending app status update to emitter", e);
+            }
         }
     }
 }

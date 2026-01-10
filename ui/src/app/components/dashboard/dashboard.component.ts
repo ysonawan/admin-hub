@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { DeploymentService, ApplicationConfig, DeploymentResponse } from '../../services/deployment.service';
 import { ServerService, RunningService, ServerHealthSummary } from '../../services/server.service';
 import { ToastrService } from 'ngx-toastr';
+import { Subscription } from 'rxjs';
 
 @Component({
     selector: 'app-dashboard',
@@ -28,6 +29,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private serverHealthInterval: any;
   private previousServiceStatus: string = 'Checking...';
   appLiveStatus: { [key: string]: boolean | null } = {};
+  private healthAndAppsSubscription: Subscription | null = null;
+  private serverHealthSubscription: Subscription | null = null;
 
   // Server-related properties
   runningServices: RunningService[] = [];
@@ -56,21 +59,80 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadApplications();
     this.loadServerData();
     this.checkDeployerHealth();
-    this.healthCheckInterval = setInterval(() => {
-      this.checkDeployerHealth();
-    }, 30000);
 
-    this.serverHealthInterval = setInterval(() => {
-      this.loadServerData();
-    }, 30000);
+    // Subscribe to health and app status updates via SSE
+    this.healthAndAppsSubscription = this.deploymentService.subscribeToHealthAndAppStatus().subscribe(
+      (event: any) => {
+        if (event.type === 'health') {
+          const health = event.data;
+          const newStatus = health.healthy ? 'Online' : 'Offline';
 
-    this.appStatusCheckInterval = setInterval(() => {
-      this.checkAllAppsLiveStatus();
-    }, 10000);
+          // Check if status changed from Offline to Online
+          if (this.previousServiceStatus === 'Offline' && newStatus === 'Online') {
+            this.loadApplications();
+          }
+
+          this.previousServiceStatus = this.serviceStatus;
+          this.serviceStatus = newStatus;
+        } else if (event.type === 'appStatus') {
+          const appStatuses = event.data.appStatuses;
+          this.appLiveStatus = { ...appStatuses };
+        }
+      },
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      (error) => {
+        console.error('Error subscribing to health updates', error);
+        // Fallback to periodic polling if SSE fails
+        this.healthCheckInterval = setInterval(() => {
+          this.checkDeployerHealth();
+          this.checkAllAppsLiveStatus();
+        }, 10000);
+      }
+    );
+
+    // Subscribe to server health updates via SSE
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    this.serverHealthSubscription = this.serverService.subscribeToServerHealth().subscribe(
+      (event: any) => {
+        if (event.type === 'serverHealth') {
+          const serverHealthData = event.data;
+          this.serverHealth = {
+            cpuUsage: serverHealthData.cpuUsage,
+            memoryUsage: serverHealthData.memoryUsage,
+            diskUsage: serverHealthData.diskUsage,
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            loadAverage: serverHealthData.loadAverage,
+            totalMemory: serverHealthData.totalMemory,
+            usedMemory: serverHealthData.usedMemory,
+            uptime: serverHealthData.uptime,
+            usedDisk: serverHealthData.usedDisk,
+            totalDisk: serverHealthData.totalDisk
+          };
+          this.runningServices = serverHealthData.runningServices || [];
+          this.serverLoading = false;
+        }
+      },
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      (error) => {
+        console.error('Error subscribing to server health updates', error);
+        // Fallback to periodic polling if SSE fails
+        this.serverHealthInterval = setInterval(() => {
+          this.loadServerData();
+        }, 30000);
+      }
+    );
   }
 
   ngOnDestroy(): void {
-    // Clean up the health check interval if it's set
+    // Unsubscribe from SSE streams
+    if (this.healthAndAppsSubscription) {
+      this.healthAndAppsSubscription.unsubscribe();
+    }
+    if (this.serverHealthSubscription) {
+      this.serverHealthSubscription.unsubscribe();
+    }
+
+    // Clean up the health check interval if it's set (fallback polling)
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
     }
@@ -78,7 +140,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.appStatusCheckInterval) {
       clearInterval(this.appStatusCheckInterval);
     }
-    // Clean up the server health interval if it's set
+    // Clean up the server health interval if it's set (fallback polling)
     if (this.serverHealthInterval) {
       clearInterval(this.serverHealthInterval);
     }
