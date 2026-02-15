@@ -71,8 +71,10 @@
           </div>
 
           <div class="space-y-2 text-sm text-slate-300 mb-4" >
-              <p><span *ngIf="app.application_url" class="text-blue-400 font-semibold">Application URL: </span> <a *ngIf="app.application_url" href="{{ app.application_url }}" target="_blank" class="text-blue-300 hover:text-blue-200 underline break-all">{{ app.application_url }}</a></p>
-            <p><span *ngIf="app.git_url" class="text-blue-400 font-semibold">Repository: </span> <span class="text-white break-all ">{{ app.git_url }}</span></p>
+              <p><span *ngIf="app.application_url" class="text-blue-400 font-medium">Application URL: </span> <a *ngIf="app.application_url" href="{{ app.application_url }}" target="_blank" class="text-blue-300 hover:text-blue-200 underline break-all">{{ app.application_url }}</a></p>
+              <p><span *ngIf="app.git_url" class="text-blue-400 font-medium">Repository: </span> <span class="text-white break-all ">{{ app.git_url }}</span></p>
+              <p><span *ngIf="app.git_url" class="text-blue-400 font-medium">Artifact Path: </span> <span class="text-white break-all ">{{ app.artifact_path }}</span></p>
+              <p><span *ngIf="app.git_url" class="text-blue-400 font-medium">Deploy Path: </span> <span class="text-white break-all ">{{ app.deploy_path }}</span></p>
           </div>
 
           <div class="flex gap-2">
@@ -104,32 +106,7 @@
       <div *ngIf="selectedApp && !loading" class="mt-8 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl border-2 border-blue-500 p-8 shadow-2xl mb-6">
         <div class="mb-6">
           <h2 class="text-2xl font-bold text-white mb-2">{{ selectedApp.name }}</h2>
-          <p class="text-slate-400">{{ getDescription(selectedApp) }}</p>
         </div>
-
-        <!-- Application Details -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 p-4 bg-slate-700/50 rounded-lg">
-            <div *ngIf="selectedApp.application_url">
-                <p class="text-sm"><span class="text-blue-400 font-semibold">🌐 Application URL: </span> <a href="{{ selectedApp.application_url }}" target="_blank" class="text-blue-300 hover:text-blue-200 underline break-all">{{ selectedApp.application_url }}</a></p>
-            </div>
-          <div *ngIf="selectedApp.git_url">
-              <p class="text-sm"><span class="text-blue-400 font-semibold">📦 Repository: </span> <span class="text-white break-all ">{{ selectedApp.git_url }}</span></p>
-          </div>
-          <div *ngIf="selectedApp.deploy_path">
-              <p class="text-sm"><span class="text-blue-400 font-semibold">📁 Deploy Path: </span> <span class="text-white break-all ">{{ selectedApp.deploy_path }}</span></p>
-          </div>
-          <div *ngIf="selectedApp.build_type">
-              <p class="text-sm"><span class="text-blue-400 font-semibold">🔨 Build Type: </span> <span class="text-white break-all ">{{ selectedApp.build_type }}</span></p>
-          </div>
-          <div *ngIf="selectedApp.artifact_path">
-              <p class="text-sm"><span class="text-blue-400 font-semibold">📦 Artifact Path: </span> <span class="text-white break-all ">{{ selectedApp.artifact_path }}</span></p>
-          </div>
-          <div *ngIf="selectedApp.symlink">
-              <p class="text-sm"><span class="text-blue-400 font-semibold">🔗 Symlink: </span> <span class="text-white break-all ">{{ selectedApp.symlink }}</span></p>
-          </div>
-
-        </div>
-
         <!-- Actions Tabs -->
         <div class="mb-6">
           <p class="text-slate-400 text-sm font-semibold mb-4">Available Actions</p>

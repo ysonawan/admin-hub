@@ -195,16 +195,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   selectApp(app: ApplicationConfig): void {
-    this.selectedApp = app;
+    if(this.selectedApp && this.selectedApp.name === app.name) {
+      this.selectedApp = null;
+    } else {
+      this.selectedApp = app;
+      if (app.application_url) {
+        this.checkAppLiveStatus(app.name);
+      }
+    }
     this.selectedAction = '';
     this.deploymentResponse = null;
-    // Log selected app for debugging
-    console.log('Selected app:', app);
-
-    // Check if app is live if it has an application URL
-    if (app.application_url) {
-      this.checkAppLiveStatus(app.name);
-    }
   }
 
   getDescription(app: ApplicationConfig): string {
